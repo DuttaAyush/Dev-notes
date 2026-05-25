@@ -1,0 +1,104 @@
+name: Sync
+
+on:
+  schedule:
+    - cron: "53 3 * * *"    # 09:23 AM IST
+    - cron: "17 5 * * *"    # 10:47 AM IST
+    - cron: "8 6 * * *"     # 11:38 AM IST
+    - cron: "42 7 * * *"    # 01:12 PM IST
+    - cron: "14 9 * * *"    # 02:44 PM IST
+    - cron: "37 10 * * *"   # 04:07 PM IST
+    - cron: "3 12 * * *"    # 05:33 PM IST
+    - cron: "21 13 * * *"   # 06:51 PM IST
+    - cron: "47 14 * * *"   # 08:17 PM IST
+    - cron: "12 16 * * *"   # 09:42 PM IST
+    - cron: "33 17 * * *"   # 11:03 PM IST
+    - cron: "57 18 * * *"   # 12:27 AM IST
+    - cron: "44 19 * * *"   # 01:14 AM IST
+    - cron: "21 20 * * *"   # 01:51 AM IST
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure git
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Run
+        run: |
+          # Read config from .github/config.json
+          CONFIG=".github/config.json"
+          MIN_C=$(jq '.min_commits' "$CONFIG")
+          MAX_C=$(jq '.max_commits' "$CONFIG")
+          POOL_SIZE=$(jq '.time_pool | length' "$CONFIG")
+
+          # Current trigger time (HH:MM in UTC)
+          CURRENT_SLOT=$(date -u '+%H:%M')
+          DATE_STR=$(date -u '+%Y%m%d')
+
+          # Hash the date for a deterministic daily seed
+          SEED=$(echo -n "$DATE_STR" | md5sum | cut -c1-8)
+          SEED_DEC=$(( 16#$SEED ))
+
+          # Decide how many commits today
+          RANGE=$(( MAX_C - MIN_C + 1 ))
+          COMMITS_TODAY=$(( (SEED_DEC % RANGE) + MIN_C ))
+
+          echo "Date: $DATE_STR | Commits today: $COMMITS_TODAY | Current slot: $CURRENT_SLOT"
+
+          # Rest day
+          if [ "$COMMITS_TODAY" -eq 0 ]; then
+            echo "Skipping."
+            exit 0
+          fi
+
+          # Pick which slots are active today using the seed
+          declare -A SLOT_SCORES
+          for i in $(seq 0 $(( POOL_SIZE - 1 ))); do
+            SLOT=$(jq -r ".time_pool[$i]" "$CONFIG")
+            SCORE=$(echo -n "${DATE_STR}${i}" | md5sum | cut -c1-8)
+            SLOT_SCORES["$SLOT"]=$SCORE
+          done
+
+          # Sort slots by their hash score and pick the top COMMITS_TODAY
+          CHOSEN=$(for SLOT in "${!SLOT_SCORES[@]}"; do
+            echo "${SLOT_SCORES[$SLOT]} $SLOT"
+          done | sort | head -n "$COMMITS_TODAY" | awk '{print $2}')
+
+          # Check if current slot is chosen
+          MATCH=false
+          for SLOT in $CHOSEN; do
+            if [ "$SLOT" = "$CURRENT_SLOT" ]; then
+              MATCH=true
+              break
+            fi
+          done
+
+          if [ "$MATCH" = false ]; then
+            echo "Slot not active. Skipping."
+            exit 0
+          fi
+
+          # Pick a random message
+          MSG_SEED=$(echo -n "${DATE_STR}${CURRENT_SLOT}" | md5sum | cut -c1-8)
+          MSG_DEC=$(( 16#$MSG_SEED ))
+          MSG_COUNT=$(jq '.messages | length' "$CONFIG")
+          MSG_INDEX=$(( MSG_DEC % MSG_COUNT ))
+          MSG=$(jq -r ".messages[$MSG_INDEX]" "$CONFIG")
+
+          # Overwrite notes.md with just the latest entry
+          TIMESTAMP=$(date -u '+%Y-%m-%d %H:%M:%S UTC')
+          echo "Last updated: $TIMESTAMP" > notes.md
+
+          git add notes.md
+          git commit -m "$MSG"
+          git push

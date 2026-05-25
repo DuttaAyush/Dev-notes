@@ -12,7 +12,7 @@ No local machine, no cron jobs on your PC, no manual effort. Set it up once and 
 - **Randomised timing** — commits land at different hours each day from a pool of 14 time slots
 - **Deterministic daily plan** — all triggers on the same day agree on the plan using a date-based hash seed
 - **Natural rest days** — occasionally produces zero-commit days so the graph doesn't look artificial
-- **One-file configuration** — adjust commit range, time slots, and messages without touching the workflow
+- **One-file configuration** — adjust commit range, time slots, and messages via a single JSON file
 - **Zero maintenance** — runs entirely on GitHub Actions with no external dependencies
 
 ---
@@ -22,11 +22,10 @@ No local machine, no cron jobs on your PC, no manual effort. Set it up once and 
 ```
 .
 ├── .github/
+│   ├── config.json              # Settings (hidden inside .github)
 │   └── workflows/
-│       └── auto-commit.yml   # GitHub Actions workflow with 14 cron triggers
-├── commit.py                  # Core logic — decides whether to commit or skip
-├── config.json                # User-configurable settings
-├── activity.log               # Append-only log updated by each commit
+│       └── sync.yml             # Workflow with 14 cron triggers
+├── notes.md                      # Updated by each commit (single line, overwritten)
 └── README.md
 ```
 
@@ -42,7 +41,7 @@ No local machine, no cron jobs on your PC, no manual effort. Set it up once and 
 ### Step 1 — Create a Repository
 
 1. Go to [github.com/new](https://github.com/new)
-2. Name it something like `daily-tracker` or `activity-log`
+2. Choose a name for your repository
 3. Set visibility to **Public** (required for commits to appear on your profile graph)
 4. **Do not** initialise with a README (we'll push our own)
 
@@ -52,7 +51,7 @@ No local machine, no cron jobs on your PC, no manual effort. Set it up once and 
 git init
 git remote add origin https://github.com/<YOUR_USERNAME>/<YOUR_REPO>.git
 git add .
-git commit -m "feat: initialise automated contribution tracker"
+git commit -m "initial commit"
 git branch -M main
 git push -u origin main
 ```
@@ -67,7 +66,7 @@ git push -u origin main
 ### Step 4 — Verify
 
 1. Go to the **Actions** tab in your repository
-2. Select **🌱 Keep Graph Green**
+2. Select **Sync**
 3. Click **Run workflow → Run workflow** to trigger a manual test
 4. Check the run logs to confirm the script executed successfully
 
@@ -77,14 +76,14 @@ The automated schedule will take over from here. No further action required.
 
 ## ⚙️ Configuration
 
-All settings live in [`config.json`](config.json):
+All settings live in [`.github/config.json`](.github/config.json):
 
 ```json
 {
   "min_commits": 0,
   "max_commits": 9,
-  "time_pool": ["03:53", "05:17", "06:08", ...],
-  "messages": ["chore: update dependencies", "fix: minor bug fix", ...]
+  "time_pool": ["03:53", "05:17", "06:08", "..."],
+  "messages": ["chore: update dependencies", "fix: minor bug fix", "..."]
 }
 ```
 
@@ -92,22 +91,23 @@ All settings live in [`config.json`](config.json):
 |---|---|---|
 | `min_commits` | `int` | Minimum commits per day. Set to `0` for occasional rest days, `1` for always-green. |
 | `max_commits` | `int` | Maximum commits per day. |
-| `time_pool` | `string[]` | UTC times (HH:MM) that match the cron triggers in the workflow file. |
-| `messages` | `string[]` | Pool of commit messages. One is randomly selected per commit. |
+| `time_pool` | `string[]` | UTC times (HH:MM) matching the cron triggers in the workflow file. |
+| `messages` | `string[]` | Pool of realistic commit messages. One is randomly selected per commit. |
 
-> **Note:** If you modify `time_pool`, you must also update the corresponding `cron` entries in `.github/workflows/auto-commit.yml` to match.
+> **Note:** If you modify `time_pool`, you must also update the corresponding `cron` entries in `.github/workflows/sync.yml` to match.
 
 ---
 
 ## 🧠 How It Works
 
 1. **14 cron triggers** are defined in the workflow, spread across the day (9:23 AM – 1:51 AM IST).
-2. Each trigger invokes `commit.py`, which:
+2. Each trigger runs an inline bash script that:
+   - Reads settings from `.github/config.json` using `jq` (pre-installed on GitHub runners).
    - Computes an MD5 hash of today's date to generate a deterministic seed.
    - Uses the seed to decide how many commits to make today (between `min_commits` and `max_commits`).
    - Uses the same seed to randomly select that many time slots from the pool.
    - Checks whether the current trigger's time slot was selected.
-   - If selected → appends a timestamped entry to `activity.log`, commits with a random message, and pushes.
+   - If selected → overwrites `notes.md` with a timestamp, commits with a random message, and pushes.
    - If not selected → exits silently with no changes.
 
 Because every trigger on the same day hashes the same date string, they all independently arrive at the same commit plan — no shared state or coordination needed.
@@ -120,7 +120,7 @@ Because every trigger on the same day hashes the same date string, they all inde
 |---|---|
 | Runs per day | 14 (one per time slot) |
 | Average commits per day | ~4.5 |
-| Average run duration | ~10–30 seconds |
+| Average run duration | ~5–30 seconds |
 | Estimated monthly usage | ~100 minutes |
 | GitHub Actions free tier (public repos) | **Unlimited** |
 
