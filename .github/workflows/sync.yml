@@ -30,8 +30,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name  "DuttaAyush"
-          git config user.email "ayushdutta230@gmail.com"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
       - name: Run
         run: |
@@ -41,8 +41,14 @@ jobs:
           MAX_C=$(jq '.max_commits' "$CONFIG")
           POOL_SIZE=$(jq '.time_pool | length' "$CONFIG")
 
-          # Current trigger time (HH:MM in UTC)
-          CURRENT_SLOT=$(date -u '+%H:%M')
+          # Current trigger time
+          if [ -n "${{ github.event.schedule }}" ]; then
+            # Parse cron expression, e.g. "53 3 * * *" -> "03:53"
+            CURRENT_SLOT=$(echo "${{ github.event.schedule }}" | awk '{printf "%02d:%02d", $2, $1}')
+          else
+            # Fallback for manual workflow_dispatch triggers
+            CURRENT_SLOT=$(date -u '+%H:%M')
+          fi
           DATE_STR=$(date -u '+%Y%m%d')
 
           # Hash the date for a deterministic daily seed
