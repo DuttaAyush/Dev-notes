@@ -30,8 +30,8 @@ jobs:
 
       - name: Configure git
         run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git config user.name  "DuttaAyush"
+          git config user.email "ayushdutta230@gmail.com"
 
       - name: Run
         run: |
