@@ -8,7 +8,7 @@ No local machine, no cron jobs on your PC, no manual effort. Set it up once and 
 
 ## ✨ Features
 
-- **Randomised commit count** — 0 to 9 commits per day, never the same pattern
+- **Randomised commit count** — 0 to 6 commits per day, never the same pattern
 - **Randomised timing** — commits land at different hours each day from a pool of 14 time slots
 - **Deterministic daily plan** — all triggers on the same day agree on the plan using a date-based hash seed
 - **Natural rest days** — occasionally produces zero-commit days so the graph doesn't look artificial
@@ -81,7 +81,7 @@ All settings live in [`.github/config.json`](.github/config.json):
 ```json
 {
   "min_commits": 0,
-  "max_commits": 9,
+  "max_commits": 6,
   "time_pool": ["03:53", "05:17", "06:08", "..."],
   "messages": ["chore: update dependencies", "fix: minor bug fix", "..."]
 }
